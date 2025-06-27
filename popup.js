@@ -1,66 +1,74 @@
 document.addEventListener('DOMContentLoaded', function() {
-  const startDateInput = document.getElementById('startDate');
-  const endDateInput = document.getElementById('endDate');
-  const categorizeButton = document.getElementById('categorizeButton');
-  const loadingDiv = document.getElementById('loading');
-  const resultsDisplay = document.getElementById('results-display');
+  const userInput = document.getElementById('user-input');
+  const sendButton = document.getElementById('send-button');
+  const chatMessages = document.getElementById('chat-messages');
 
-  // Set default dates (e.g., last 3 days) for convenience
-  const today = new Date();
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(today.getDate() - 3);
+  function appendMessage(sender, text) {
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message', `${sender}-message`);
+    const p = document.createElement('p');
+    p.textContent = text;
+    messageDiv.appendChild(p);
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+  }
 
-  startDateInput.value = threeDaysAgo.toISOString().split('T')[0];
-  endDateInput.value = today.toISOString().split('T')[0];
+  async function handleUserInput() {
+    const message = userInput.value.trim();
+    if (message === '') return;
 
-  // Event listener for the Categorize Button
-  categorizeButton.addEventListener('click', function() {
-    const startDate = startDateInput.value;
-    const endDate = endDateInput.value;
+    appendMessage('user', message);
+    userInput.value = ''; // Clear input
 
-    if (!startDate || !endDate) {
-      alert('Please select both a start and end date.'); // Use a better UI notification in prod
-      return;
-    }
+    // Show a loading indicator if desired
+    // appendMessage('bot', 'Thinking...'); // Or a specific loading spinner
 
-    loadingDiv.style.display = 'block'; // Show loading indicator
-    resultsDisplay.innerHTML = ''; // Clear previous results
-
-    // Send a message to the background script to start categorization
-    chrome.runtime.sendMessage({
-      action: "categorize_emails",
-      startDate: startDate,
-      endDate: endDate
-    }, function(response) {
-      loadingDiv.style.display = 'none'; // Hide loading indicator
-
-      if (chrome.runtime.lastError) {
-        resultsDisplay.innerHTML = '<p style="color: red;">Error: ' + chrome.runtime.lastError.message + '</p>';
-        console.error(chrome.runtime.lastError.message);
-        return;
+    try {
+      // Get current tab info to potentially extract thread ID if in Gmail
+      let currentTabId = null;
+      let currentTabUrl = null;
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs && tabs.length > 0) {
+        currentTabId = tabs[0].id;
+        currentTabUrl = tabs[0].url;
       }
 
-      if (response && response.categorizedEmails) {
-        if (response.categorizedEmails.length === 0) {
-          resultsDisplay.innerHTML = '<p>No emails found for the selected date range or no categories determined.</p>';
-        } else {
-          response.categorizedEmails.forEach(email => {
-            const emailItem = document.createElement('div');
-            emailItem.className = 'email-item';
-            emailItem.innerHTML = `
-              <p><strong>Subject:</strong> ${email.subject || 'No Subject'} <span class="category">${email.category || 'Uncategorized'}</span></p>
-              <p><strong>From:</strong> ${email.sender.name || email.sender.email} &lt;${email.sender.email}&gt;</p>
-              <p><strong>Time:</strong> ${new Date(email.datetime).toLocaleString()}</p>
-              <p><strong>Snippet:</strong> ${email.snippet || 'No snippet available.'}</p>
-            `;
-            resultsDisplay.appendChild(emailItem);
-          });
+      // Send message to background script for processing
+      chrome.runtime.sendMessage(
+        {
+          action: "process_chatbot_query",
+          query: message,
+          tabId: currentTabId,
+          tabUrl: currentTabUrl
+        },
+        function(response) {
+          if (chrome.runtime.lastError) {
+            console.error("Error sending message:", chrome.runtime.lastError.message);
+            appendMessage('bot', `Error: ${chrome.runtime.lastError.message}. Please try again.`);
+            return;
+          }
+
+          if (response && response.status === 'success') {
+            appendMessage('bot', response.reply);
+          } else if (response && response.status === 'error') {
+            appendMessage('bot', `Error: ${response.message || 'An unknown error occurred.'}`);
+            console.error("Backend error:", response.message);
+          } else {
+            appendMessage('bot', "No response received from the backend. Check console for details.");
+            console.warn("Unexpected response structure:", response);
+          }
         }
-      } else if (response && response.error) {
-         resultsDisplay.innerHTML = `<p style="color: red;">An error occurred: ${response.error}. Check console for details.</p>`;
-      } else {
-         resultsDisplay.innerHTML = '<p style="color: orange;">Could not retrieve email categories. Ensure permissions are granted and N8n is running.</p>';
-      }
-    });
+      );
+    } catch (error) {
+      console.error("Error in popup.js:", error);
+      appendMessage('bot', `An unexpected error occurred: ${error.message}`);
+    }
+  }
+
+  sendButton.addEventListener('click', handleUserInput);
+  userInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      handleUserInput();
+    }
   });
 });

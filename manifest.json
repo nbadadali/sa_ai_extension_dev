@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Sa.AI Email Assistant",
+  "name": "Sa.AI Gmail Chatbot",
   "version": "1.0",
-  "description": "Categorize your Gmail emails with AI.",
+  "description": "Interact with your Gmail using AI via a chatbot, powered by n8n workflows.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -16,22 +16,38 @@
     }
   },
   "permissions": [
-    "identity",           
-    "storage",            
-    "activeTab"           
+    "identity",
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
     "https://www.googleapis.com/*",
-    "https://saaidev99.app.n8n.cloud/*" 
+    "https://saaidev99.app.n8n.cloud/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "oauth2": {
-    "client_id": "76996691363-nevr3buhf9rsqb35kn3lqvum00rkgisk.apps.googleusercontent.com", 
+    "client_id": "76996691363-nevr3buhf9rsqb35kn3lqvum00rkgisk.apps.googleusercontent.com",
     "scopes": [
-      "https://www.googleapis.com/auth/gmail.readonly" 
+      "https://www.googleapis.com/auth/gmail.readonly"
     ]
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "styles.css", "popup.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
