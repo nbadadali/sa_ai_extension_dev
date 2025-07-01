@@ -11,7 +11,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://bhargavibhatt.app.n8n.cloud*"
+    "https://bhargavibhatt.app.n8n.cloud/*"
   ],
   "content_scripts": [
     {
@@ -31,7 +31,7 @@
     }
   },
   "oauth2": {
-    "client_id": "76996691363-aamae48eidq4ecnpq23sqt11sb18umc0.apps.googleusercontent.com",
+    "client_id": "xxx.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/gmail.readonly",
       "openid",

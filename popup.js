@@ -1,12 +1,25 @@
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", async function() {
   const connectButton = document.getElementById("connect-button");
   const sendButton = document.getElementById("send-button");
   const userInput = document.getElementById("user-input");
   const chatMessages = document.getElementById("chat-messages");
 
+  // Check if userId already exists in storage
+  const storageData = await chrome.storage.local.get("userId");
+  const existingUserId = storageData.userId;
+  console.log("popup loaded, userId in storage:", existingUserId);
+
+  if (existingUserId) {
+    // user already connected
+    document.getElementById("connect-area").style.display = "none";
+    document.getElementById("chat-area").style.display = "block";
+    appendMessage("bot", "Welcome back! How can I help you with Gmail?");
+  }
+
   connectButton.addEventListener("click", () => {
     chrome.runtime.sendMessage({ action: "start_oauth" }, (response) => {
       if (response && response.status === "success") {
+        chrome.storage.local.set({ userId: response.userId });
         document.getElementById("connect-area").style.display = "none";
         document.getElementById("chat-area").style.display = "block";
         appendMessage("bot", "Connected! How can I help you with Gmail?");
@@ -29,31 +42,39 @@ document.addEventListener("DOMContentLoaded", function() {
   async function handleUserInput() {
     const message = userInput.value.trim();
     if (message === "") return;
+
     appendMessage("user", message);
     userInput.value = "";
 
-    const { userId } = await chrome.storage.local.get("userId");
+    const storageData = await chrome.storage.local.get("userId");
+    const userId = storageData.userId;
+    console.log("userId from storage when sending:", userId);
+
     if (!userId) {
       appendMessage("bot", "Please connect your Gmail first.");
       return;
     }
 
     try {
-      const response = await fetch("https://bhargavibhatt.app.n8n.cloud/webhook-test/Sa.AI-Chatbot", {
+      console.log("sending query to n8n summarize-inbox webhook:", userId, message);
+
+      const response = await fetch("https://bhargavibhatt.app.n8n.cloud/webhook/Sa.AI-Chatbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, query: message })
       });
 
       const data = await response.json();
+      console.log("n8n response received:", data);
+
       if (data && data.reply) {
         appendMessage("bot", data.reply);
       } else {
-        appendMessage("bot", "No reply received.");
+        appendMessage("bot", "No reply received from n8n.");
       }
     } catch (error) {
-      console.error(error);
-      appendMessage("bot", "Error communicating with server.");
+      console.error("Error communicating with n8n:", error);
+      appendMessage("bot", "Error communicating with n8n.");
     }
   }
 
