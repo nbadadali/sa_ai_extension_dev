@@ -1,116 +1,38 @@
-// --- Configuration Constants ---
-// REPLACE THIS WITH YOUR ACTUAL N8N WEBHOOK URL FOR THE CHATBOT
-const N8N_CHATBOT_WEBHOOK_URL = "https://saaidev99.app.n8n.cloud/webhook-test/sa_ai_extension_dev";
-const GMAIL_API_BASE_URL = "https://www.googleapis.com/gmail/v1/users/me/messages"; // Not used directly by extension in this MVP, but good for context
-
-// --- Helper function for making API calls to N8n ---
-async function callN8nWorkflow(url, payload) {
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`N8n API Error: ${response.status} - ${errorText}`);
-      throw new Error(`N8n API Error: ${response.status} - ${errorText}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error calling N8n workflow:', error);
-    throw error;
-  }
-}
-
-// --- Listener for messages from popup.js or content.js ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "process_chatbot_query") {
-    (async () => {
-      try {
-        // 1. Get Gmail OAuth Token
-        const token = await new Promise(resolve => {
-          chrome.identity.getAuthToken({ interactive: true }, token => {
-            if (chrome.runtime.lastError) {
-              console.error("Google Auth Error:", chrome.runtime.lastError.message);
-              resolve(null);
-            } else {
-              resolve(token);
-            }
-          });
-        });
+  if (request.action === "start_oauth") {
+    const clientId = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+    const redirectUri = "https://bhargavibhatt.app.n8n.cloud/webhook-test/oauth/callback";
+    const scope = "https://www.googleapis.com/auth/gmail.readonly openid email profile";
 
-        if (!token) {
-          sendResponse({ status: 'error', message: "Authentication failed. Please grant Gmail access." });
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent(scope)}` +
+      `&access_type=offline` +
+      `&prompt=consent`;
+
+    chrome.identity.launchWebAuthFlow(
+      { url: authUrl, interactive: true },
+      (redirectUrl) => {
+        if (chrome.runtime.lastError) {
+          console.error("OAuth error:", chrome.runtime.lastError);
+          sendResponse({ status: "error", message: chrome.runtime.lastError.message });
           return;
         }
 
-        // 2. Potentially get thread ID if user is in a Gmail thread
-        let threadId = null;
-        if (request.tabUrl && request.tabUrl.includes('mail.google.com/mail/u/')) {
-            // Updated regex to correctly capture Gmail thread IDs from URLs like #inbox/KGFmKRHXNMPdCPTjWqMvGFgDqFgB
-            // It looks for a sequence of alphanumeric characters after a common Gmail folder name in the hash.
-            const urlMatch = request.tabUrl.match(/#(all|inbox|starred|sent|drafts|trash)\/([a-zA-Z0-9]+)$/);
-            if (urlMatch && urlMatch[2]) { // The thread ID is now in the second capturing group
-                threadId = urlMatch[2];
-                console.log("Detected Gmail Thread ID from URL:", threadId);
-            } else {
-                console.log("No specific Gmail thread ID found in URL. Assuming general inbox query.");
-            }
-        }
+        console.log("OAuth redirectUrl:", redirectUrl);
 
-
-        // 3. Prepare payload for N8n
-        const n8nPayload = {
-          userQuery: request.query,
-          gmailAccessToken: token,
-          currentGmailThreadId: threadId, // Pass threadId if available
-          // Add any other context needed for your N8n features
-        };
-
-        console.log("Sending payload to N8n:", n8nPayload);
-
-        // 4. Send to N8n workflow
-        const n8nResponse = await callN8nWorkflow(N8N_CHATBOT_WEBHOOK_URL, n8nPayload);
-
-        // 5. Process N8n response
-        // Expecting n8nResponse to have a 'reply' field for the chatbot
-        if (n8nResponse && n8nResponse.reply) {
-          sendResponse({ status: 'success', reply: n8nResponse.reply });
+        // Your backend should redirect with ?userId=12345
+        const userIdMatch = redirectUrl.match(/userId=([^&]+)/);
+        if (userIdMatch && userIdMatch[1]) {
+          chrome.storage.local.set({ userId: userIdMatch[1] });
+          sendResponse({ status: "success", userId: userIdMatch[1] });
         } else {
-          console.error("N8n response structure unexpected:", n8nResponse);
-          sendResponse({ status: 'error', message: "Unexpected response from N8n workflow." });
+          sendResponse({ status: "error", message: "User ID not found in redirect URL." });
         }
-
-      } catch (error) {
-        console.error("Error in background script:", error);
-        sendResponse({ status: 'error', message: error.message || "Failed to process query." });
       }
-    })();
-    return true; // Indicates an asynchronous response
-  }
-});
+    );
 
-// --- Alarm listener for Follow-Up Reminders ---
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name.startsWith("follow_up_task_")) {
-    const taskId = alarm.name.replace("follow_up_task_", "");
-    console.log(`Follow-up reminder triggered for task: ${taskId}`);
-
-    // In a real scenario, you'd fetch task details from Supabase via n8n
-    // and then display a richer notification. For MVP, a generic one.
-    chrome.notifications.create(alarm.name, {
-      type: "basic",
-      iconUrl: "icons/icon48.png",
-      title: "Sa.AI Follow-Up Reminder",
-      message: `Time to follow up on a task! (Task ID: ${taskId})`,
-      priority: 2
-    });
-
-    // Optionally, send a message to N8n to mark reminder as sent or re-evaluate
-    // await callN8nWorkflow("YOUR_N8N_REMINDER_CALLBACK_URL", { taskId: taskId, action: "reminder_sent" });
+    return true; // keep async alive
   }
 });

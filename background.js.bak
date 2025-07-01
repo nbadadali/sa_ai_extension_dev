@@ -51,15 +51,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // 2. Potentially get thread ID if user is in a Gmail thread
         let threadId = null;
         if (request.tabUrl && request.tabUrl.includes('mail.google.com/mail/u/')) {
-            // Attempt to get thread ID from the URL or by sending a message to content.js
-            // For now, we'll extract from URL if possible.
-            const urlMatch = request.tabUrl.match(/#all\/(thread-[a-f0-9]+)|#inbox\/(thread-[a-f0-9]+)|#starred\/(thread-[a-f0-9]+)/);
-            if (urlMatch && urlMatch[1]) {
-                threadId = urlMatch[1];
+            // Updated regex to correctly capture Gmail thread IDs from URLs like #inbox/KGFmKRHXNMPdCPTjWqMvGFgDqFgB
+            // It looks for a sequence of alphanumeric characters after a common Gmail folder name in the hash.
+            const urlMatch = request.tabUrl.match(/#(all|inbox|starred|sent|drafts|trash)\/([a-zA-Z0-9]+)$/);
+            if (urlMatch && urlMatch[2]) { // The thread ID is now in the second capturing group
+                threadId = urlMatch[2];
                 console.log("Detected Gmail Thread ID from URL:", threadId);
             } else {
-                // If not in URL, we might need content.js to extract it from DOM
-                // For this MVP, we rely on the URL or omit if not found.
                 console.log("No specific Gmail thread ID found in URL. Assuming general inbox query.");
             }
         }
