@@ -1,74 +1,64 @@
-document.addEventListener('DOMContentLoaded', function() {
-  const userInput = document.getElementById('user-input');
-  const sendButton = document.getElementById('send-button');
-  const chatMessages = document.getElementById('chat-messages');
+document.addEventListener("DOMContentLoaded", function() {
+  const connectButton = document.getElementById("connect-button");
+  const sendButton = document.getElementById("send-button");
+  const userInput = document.getElementById("user-input");
+  const chatMessages = document.getElementById("chat-messages");
+
+  connectButton.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "start_oauth" }, (response) => {
+      if (response && response.status === "success") {
+        document.getElementById("connect-area").style.display = "none";
+        document.getElementById("chat-area").style.display = "block";
+        appendMessage("bot", "Connected! How can I help you with Gmail?");
+      } else {
+        alert("Error connecting to Gmail: " + (response.message || "Unknown error"));
+      }
+    });
+  });
 
   function appendMessage(sender, text) {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', `${sender}-message`);
-    const p = document.createElement('p');
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message", `${sender}-message`);
+    const p = document.createElement("p");
     p.textContent = text;
     messageDiv.appendChild(p);
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
   async function handleUserInput() {
     const message = userInput.value.trim();
-    if (message === '') return;
+    if (message === "") return;
+    appendMessage("user", message);
+    userInput.value = "";
 
-    appendMessage('user', message);
-    userInput.value = ''; // Clear input
-
-    // Show a loading indicator if desired
-    // appendMessage('bot', 'Thinking...'); // Or a specific loading spinner
+    const { userId } = await chrome.storage.local.get("userId");
+    if (!userId) {
+      appendMessage("bot", "Please connect your Gmail first.");
+      return;
+    }
 
     try {
-      // Get current tab info to potentially extract thread ID if in Gmail
-      let currentTabId = null;
-      let currentTabUrl = null;
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs && tabs.length > 0) {
-        currentTabId = tabs[0].id;
-        currentTabUrl = tabs[0].url;
+      const response = await fetch("https://bhargavibhatt.app.n8n.cloud/webhook-test/oauth/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, query: message })
+      });
+
+      const data = await response.json();
+      if (data && data.reply) {
+        appendMessage("bot", data.reply);
+      } else {
+        appendMessage("bot", "No reply received.");
       }
-
-      // Send message to background script for processing
-      chrome.runtime.sendMessage(
-        {
-          action: "process_chatbot_query",
-          query: message,
-          tabId: currentTabId,
-          tabUrl: currentTabUrl
-        },
-        function(response) {
-          if (chrome.runtime.lastError) {
-            console.error("Error sending message:", chrome.runtime.lastError.message);
-            appendMessage('bot', `Error: ${chrome.runtime.lastError.message}. Please try again.`);
-            return;
-          }
-
-          if (response && response.status === 'success') {
-            appendMessage('bot', response.reply);
-          } else if (response && response.status === 'error') {
-            appendMessage('bot', `Error: ${response.message || 'An unknown error occurred.'}`);
-            console.error("Backend error:", response.message);
-          } else {
-            appendMessage('bot', "No response received from the backend. Check console for details.");
-            console.warn("Unexpected response structure:", response);
-          }
-        }
-      );
     } catch (error) {
-      console.error("Error in popup.js:", error);
-      appendMessage('bot', `An unexpected error occurred: ${error.message}`);
+      console.error(error);
+      appendMessage("bot", "Error communicating with server.");
     }
   }
 
-  sendButton.addEventListener('click', handleUserInput);
-  userInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      handleUserInput();
-    }
+  sendButton.addEventListener("click", handleUserInput);
+  userInput.addEventListener("keypress", function(e) {
+    if (e.key === "Enter") handleUserInput();
   });
 });

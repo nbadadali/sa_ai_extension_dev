@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     try {
-      const response = await fetch("https://bhargavibhatt.app.n8n.cloud/webhook-test/oauth/callback", {
+      const response = await fetch("https://bhargavibhatt.app.n8n.cloud/webhook-test/Sa.AI-Chatbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, query: message })

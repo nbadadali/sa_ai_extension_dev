@@ -11,7 +11,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://bhargavibhatt.app.n8n.cloud*"
+    "https://bhargavibhatt.app.n8n.cloud/*"
   ],
   "content_scripts": [
     {
