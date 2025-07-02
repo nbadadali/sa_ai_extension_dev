@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "start_oauth") {
-    const clientId = "xxx.apps.googleusercontent.com";
+    const clientId = "76996691363-nevr3buhf9rsqb35kn3lqvum00rkgisk.apps.googleusercontent.com";
     const redirectUri = "https://bhargavibhatt.app.n8n.cloud/webhook-test/oauth/callback";
     const scope = "https://www.googleapis.com/auth/gmail.readonly openid email profile";
 
